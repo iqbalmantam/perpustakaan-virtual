@@ -171,6 +171,35 @@ threejs_code = r"""
         }
         #info-box h3 { margin: 0 0 4px 0; color: #00f3ff; font-size: 1.1rem; }
         #info-box p { margin: 0; font-size: 0.9rem; color: #8ab4f8; }
+        /* Panel detail skill (muncul saat kartu diklik) */
+        #detail {
+            position: absolute; right: 20px; top: 90px; width: 300px; z-index: 20;
+            background: rgba(8, 18, 34, 0.88); border: 1px solid rgba(0, 243, 255, 0.45);
+            border-radius: 14px; padding: 18px 20px; color: #c9d1d9;
+            box-shadow: 0 0 28px rgba(0, 243, 255, 0.28); backdrop-filter: blur(12px);
+            transform: translateX(120%); opacity: 0; pointer-events: none;
+            transition: transform 0.45s ease, opacity 0.45s ease;
+        }
+        #detail.show { transform: none; opacity: 1; pointer-events: auto; }
+        #d-cat { font-size: 0.78rem; letter-spacing: 1.5px; text-transform: uppercase; margin-bottom: 6px; }
+        #detail h2 { margin: 0 0 12px 0; font-size: 1.25rem; color: #e6f7ff; line-height: 1.25; }
+        .d-level-row { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+        .d-track { flex: 1; height: 10px; border-radius: 6px; background: rgba(255,255,255,0.12); overflow: hidden; }
+        #d-bar { height: 100%; width: 0; border-radius: 6px; transition: width 0.8s ease; }
+        #d-level { font-weight: bold; color: #e6f7ff; min-width: 42px; text-align: right; }
+        #d-desc { margin: 0 0 10px 0; font-size: 0.92rem; line-height: 1.5; color: #a9c1e0; }
+        #d-date { font-size: 0.82rem; color: #6b8cae; margin-bottom: 14px; }
+        #d-back {
+            width: 100%; padding: 9px 12px; border-radius: 9px; cursor: pointer;
+            background: rgba(0, 243, 255, 0.12); color: #00f3ff; font-size: 0.9rem;
+            border: 1px solid rgba(0, 243, 255, 0.5);
+        }
+        #d-back:hover { background: rgba(0, 243, 255, 0.25); }
+        @media (max-width: 700px) {
+            #detail { right: 10px; left: 10px; width: auto; top: auto; bottom: 10px; transform: translateY(120%); }
+            #detail.show { transform: none; }
+            .holo-overlay h1 { font-size: 1.05rem; }
+        }
     </style>
 </head>
 <body>
@@ -182,7 +211,15 @@ threejs_code = r"""
         <h3 id="info-title"></h3>
         <p id="info-desc"></p>
     </div>
-    <div class="hint">Seret mouse = putar • Scroll = zoom • Klik kanan + seret = geser</div>
+    <div id="detail">
+        <div id="d-cat"></div>
+        <h2 id="d-title"></h2>
+        <div class="d-level-row"><div class="d-track"><div id="d-bar"></div></div><span id="d-level"></span></div>
+        <p id="d-desc"></p>
+        <div id="d-date"></div>
+        <button id="d-back" type="button">← Kembali ke ruangan</button>
+    </div>
+    <div class="hint">Seret = putar • Scroll = zoom • Klik kartu = zoom detail • Esc = kembali</div>
     <div id="canvas-container"></div>
 
     <!-- Three.js + OrbitControls + Bloom (glow) -->
@@ -454,8 +491,73 @@ threejs_code = r"""
             pointer.y = -((e.clientY - r.top) / r.height) * 2 + 1;
         }
         renderer.domElement.addEventListener('pointermove', setPointer);
-        renderer.domElement.addEventListener('pointerdown', setPointer);
         renderer.domElement.addEventListener('pointerleave', () => pointer.set(-2, -2));
+
+        // ===== Klik kartu: kamera terbang mendekat + panel detail =====
+        const infoBox = document.getElementById('info-box');
+        const detail = document.getElementById('detail');
+        let selected = null;   // kartu yang sedang dibuka
+        let flight = null;     // animasi perpindahan kamera yang sedang berjalan
+        let overview = null;   // posisi kamera sebelum mendekat, untuk tombol kembali
+
+        function flyTo(toPos, toTarget, dur) {
+            flight = {
+                t0: performance.now(), dur: dur,
+                fromPos: camera.position.clone(), toPos: toPos,
+                fromTarget: controls.target.clone(), toTarget: toTarget
+            };
+        }
+        function fillDetail(item) {
+            const col = levelColor(item.Level);
+            document.getElementById('d-title').textContent = item.Skill;
+            document.getElementById('d-cat').textContent = item.Kategori;
+            document.getElementById('d-cat').style.color = col;
+            document.getElementById('d-desc').textContent = item.Deskripsi || '—';
+            document.getElementById('d-date').textContent = item.Tanggal ? '📅 ' + item.Tanggal : '';
+            document.getElementById('d-level').textContent = Math.round(item.Level) + '%';
+            const bar = document.getElementById('d-bar');
+            bar.style.width = Math.min(100, item.Level) + '%';
+            bar.style.background = col;
+        }
+        function selectCard(m) {
+            if (!selected) overview = { pos: camera.position.clone(), target: controls.target.clone() };
+            selected = m;
+            const p = m.position;
+            const dir = new THREE.Vector3(-p.x, 0, -p.z);   // arah dari kartu ke pusat ruangan
+            if (dir.lengthSq() < 0.01) dir.set(0, 0, 1);
+            dir.normalize();
+            flyTo(new THREE.Vector3(p.x + dir.x * 4.6, p.y + 0.7, p.z + dir.z * 4.6), p.clone(), 1100);
+            fillDetail(m.userData.item);
+            detail.classList.add('show');
+            infoBox.style.display = 'none';
+        }
+        function deselect() {
+            if (!selected) return;
+            selected = null;
+            detail.classList.remove('show');
+            infoBox.style.display = '';
+            if (overview) flyTo(overview.pos, overview.target, 1000);
+        }
+
+        // Klik = tekan dan lepas tanpa bergeser (seretan tetap memutar kamera seperti biasa)
+        let downPos = null;
+        renderer.domElement.addEventListener('pointerdown', e => {
+            setPointer(e);
+            downPos = { x: e.clientX, y: e.clientY };
+            flight = null;  // pengguna memegang kendali kamera
+        });
+        renderer.domElement.addEventListener('pointerup', e => {
+            if (!downPos) return;
+            const moved = Math.hypot(e.clientX - downPos.x, e.clientY - downPos.y);
+            downPos = null;
+            if (moved > 6) return;
+            setPointer(e);
+            raycaster.setFromCamera(pointer, camera);
+            const hit = raycaster.intersectObjects(skillCards)[0];
+            if (hit) selectCard(hit.object); else deselect();
+        });
+        window.addEventListener('keydown', e => { if (e.key === 'Escape') deselect(); });
+        document.getElementById('d-back').addEventListener('click', deselect);
 
         // ===== Rak Buku Kiri & Kanan =====
         const bookCols = [0x8b4513, 0xa0522d, 0x2f4f4f, 0x6b2d5c, 0x1e3a5f, 0xb8860b];
@@ -472,31 +574,105 @@ threejs_code = r"""
             }
         }
 
-        // ===== Pohon Pengetahuan Bercabang =====
+        // ===== Pohon Pengetahuan: makin banyak skill, makin rimbun =====
         const centralTree = new THREE.Group();
+        // 4 tingkat cabang untuk <8 skill, +1 tingkat tiap 8 skill, maksimal 7 tingkat
+        const treeLevels = 4 + Math.min(3, Math.floor(rawData.length / 8));
+        const treeSeg = [];    // koordinat segmen cabang (x1,y1,z1,x2,y2,z2), digambar sekali sebagai LineSegments
+        const leafEnds = [];   // ujung cabang terluar: tempat buah skill dan titik cahaya
         function branch(start, dir, len, depth) {
-            if (depth === 0) return;
             const end = start.clone().add(dir.clone().multiplyScalar(len));
-            centralTree.add(new THREE.Line(
-                new THREE.BufferGeometry().setFromPoints([start, end]),
-                new THREE.LineBasicMaterial({ color: 0x5ad1ff, transparent: true, opacity: 0.3 + depth * 0.1 })
-            ));
-            if (depth === 1) {
-                const node = new THREE.Mesh(
-                    new THREE.SphereGeometry(0.06, 6, 6),
-                    new THREE.MeshBasicMaterial({ color: 0xbff4ff })
-                );
-                node.position.copy(end);
-                centralTree.add(node);
-            }
+            treeSeg.push(start.x, start.y, start.z, end.x, end.y, end.z);
+            if (depth === 1) { leafEnds.push(end); return; }
             for (let i = 0; i < 3; i++) {
                 const axis = new THREE.Vector3(Math.random() - 0.5, 0, Math.random() - 0.5).normalize();
                 const nd = dir.clone().applyAxisAngle(axis, 0.2 + Math.random() * 0.7).normalize();
                 branch(end, nd, len * 0.72, depth - 1);
             }
         }
-        branch(new THREE.Vector3(0, -0.6, 0), new THREE.Vector3(0, 1, 0), 2.4, 6);
+        branch(new THREE.Vector3(0, -0.6, 0), new THREE.Vector3(0, 1, 0), 2.4, treeLevels);
+        const treeGeo = new THREE.BufferGeometry();
+        treeGeo.setAttribute('position', new THREE.Float32BufferAttribute(treeSeg, 3));
+        centralTree.add(new THREE.LineSegments(
+            treeGeo, new THREE.LineBasicMaterial({ color: 0x5ad1ff, transparent: true, opacity: 0.55 })
+        ));
+        // titik cahaya kecil di setiap ujung cabang
+        centralTree.add(new THREE.Points(
+            new THREE.BufferGeometry().setFromPoints(leafEnds),
+            new THREE.PointsMaterial({ color: 0xbff4ff, size: 0.07, transparent: true, opacity: 0.8 })
+        ));
+        // Buah cahaya: satu per skill, warna mengikuti level, terhubung ke kartunya
+        const fruitGeo = new THREE.SphereGeometry(0.16, 12, 12);
+        skillCards.forEach((card, i) => {
+            const lf = leafEnds[Math.floor((i + 0.5) * leafEnds.length / skillCards.length)];
+            const fruit = new THREE.Mesh(
+                fruitGeo, new THREE.MeshBasicMaterial({ color: new THREE.Color(levelColor(card.userData.item.Level)) })
+            );
+            fruit.position.copy(lf);
+            centralTree.add(fruit);
+            card.userData.fruit = fruit;
+        });
+        // Pohon "tumbuh" saat halaman dibuka (skala 0 -> 1, dihitung di animate)
+        const treeBirth = Date.now();
+        centralTree.scale.setScalar(0.02);
         scene.add(centralTree);
+
+        // ===== Garis cahaya dari buah (pohon) ke kartu yang di-hover / dipilih =====
+        const LINK_PTS = 32;
+        const linkGeo = new THREE.BufferGeometry();
+        linkGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(LINK_PTS * 3), 3));
+        const linkLine = new THREE.Line(
+            linkGeo, new THREE.LineBasicMaterial({ color: 0x7ff0ff, transparent: true, opacity: 0.9 })
+        );
+        linkLine.frustumCulled = false;
+        linkLine.visible = false;
+        scene.add(linkLine);
+        const spark = new THREE.Mesh(new THREE.SphereGeometry(0.1, 8, 8), new THREE.MeshBasicMaterial({ color: 0xffffff }));
+        spark.visible = false;
+        scene.add(spark);
+        const _a = new THREE.Vector3(), _b = new THREE.Vector3(), _c = new THREE.Vector3();
+        function updateLink(card, t) {
+            if (!card || !card.userData.fruit) { linkLine.visible = false; spark.visible = false; return; }
+            card.userData.fruit.getWorldPosition(_a);
+            _b.copy(card.position);
+            _c.copy(_a).add(_b).multiplyScalar(0.5);
+            _c.y += 2.5;  // lengkungan ke atas
+            const arr = linkGeo.attributes.position.array;
+            for (let i = 0; i < LINK_PTS; i++) {
+                const s = i / (LINK_PTS - 1), u = 1 - s;
+                arr[i * 3]     = u * u * _a.x + 2 * u * s * _c.x + s * s * _b.x;
+                arr[i * 3 + 1] = u * u * _a.y + 2 * u * s * _c.y + s * s * _b.y;
+                arr[i * 3 + 2] = u * u * _a.z + 2 * u * s * _c.z + s * s * _b.z;
+            }
+            linkGeo.attributes.position.needsUpdate = true;
+            linkLine.visible = true;
+            // percikan bergerak dari buah ke kartu
+            const s = (t * 0.0006) % 1, u = 1 - s;
+            spark.position.set(
+                u * u * _a.x + 2 * u * s * _c.x + s * s * _b.x,
+                u * u * _a.y + 2 * u * s * _c.y + s * s * _b.y,
+                u * u * _a.z + 2 * u * s * _c.z + s * s * _b.z
+            );
+            spark.visible = true;
+        }
+
+        // ===== Partikel data melayang =====
+        const PN = window.innerWidth < 700 ? 250 : 600;  // lebih sedikit di layar kecil
+        const pPos = new Float32Array(PN * 3), pSpd = new Float32Array(PN);
+        for (let i = 0; i < PN; i++) {
+            const a = Math.random() * Math.PI * 2, r = Math.sqrt(Math.random()) * (R - 1.5);
+            pPos[i * 3] = Math.cos(a) * r;
+            pPos[i * 3 + 1] = -1 + Math.random() * 15;
+            pPos[i * 3 + 2] = Math.sin(a) * r;
+            pSpd[i] = 0.2 + Math.random() * 0.5;
+        }
+        const pGeo = new THREE.BufferGeometry();
+        pGeo.setAttribute('position', new THREE.BufferAttribute(pPos, 3));
+        scene.add(new THREE.Points(pGeo, new THREE.PointsMaterial({
+            color: 0x66e0ff, size: 0.07, transparent: true, opacity: 0.7,
+            depthWrite: false, blending: THREE.AdditiveBlending
+        })));
+        let lastT = Date.now();
 
         const plat = new THREE.Mesh(
             new THREE.CylinderGeometry(2.8, 3.2, 0.4, 48),
@@ -547,8 +723,31 @@ threejs_code = r"""
         function animate() {
             requestAnimationFrame(animate);
             const t = Date.now();
+            const dt = Math.min(0.05, (t - lastT) / 1000);
+            lastT = t;
 
             centralTree.rotation.y += 0.008;
+            // pohon tumbuh dari kecil ke ukuran penuh dalam ~2,5 detik (easeOutCubic)
+            const grow = Math.min(1, (t - treeBirth) / 2500);
+            centralTree.scale.setScalar(0.02 + 0.98 * (1 - Math.pow(1 - grow, 3)));
+
+            // partikel data naik pelan, berulang dari lantai setelah mencapai atas
+            for (let i = 0; i < PN; i++) {
+                let y = pPos[i * 3 + 1] + pSpd[i] * dt;
+                if (y > 14) y = -1;
+                pPos[i * 3 + 1] = y;
+                pPos[i * 3] += Math.sin(t * 0.001 + i) * 0.002;
+            }
+            pGeo.attributes.position.needsUpdate = true;
+
+            // kamera terbang halus saat kartu dipilih / kembali ke tampilan awal
+            if (flight) {
+                const k = Math.min(1, (performance.now() - flight.t0) / flight.dur);
+                const e = k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2;  // easeInOutCubic
+                camera.position.lerpVectors(flight.fromPos, flight.toPos, e);
+                controls.target.lerpVectors(flight.fromTarget, flight.toTarget, e);
+                if (k >= 1) flight = null;
+            }
             panels.forEach((p, i) => {
                 p.position.y = p.userData.baseY + Math.sin(t * 0.002 + i) * 0.12;
             });
@@ -566,9 +765,16 @@ threejs_code = r"""
             skillCards.forEach(m => {
                 m.position.y = m.userData.baseY + Math.sin(t * 0.002 + m.userData.phase) * 0.1;
                 m.lookAt(camera.position.x, m.position.y, camera.position.z);
-                const target = (m === hovered) ? 1.15 : 1;
+                const target = (m === hovered || m === selected) ? 1.15 : 1;
                 m.scale.setScalar(m.scale.x + (target - m.scale.x) * 0.2);
+                // buah di pohon membesar saat kartunya aktif
+                const f = m.userData.fruit;
+                if (f) {
+                    const ft = (m === hovered || m === selected) ? 2 : 1;
+                    f.scale.setScalar(f.scale.x + (ft - f.scale.x) * 0.2);
+                }
             });
+            updateLink(selected || hovered, t);
 
             controls.update();
             composer.render();
