@@ -319,16 +319,21 @@ threejs_code = r"""
             return new THREE.CanvasTexture(c);
         }
 
+        // Normalisasi nama kategori agar cocok walau beda huruf besar/kecil atau "dan" vs "&"
+        const normCat = s => String(s || '').toLowerCase().replace(/\s+/g, ' ').replace(/\b(dan|and)\b/g, '&').replace(/\s*&\s*/g, ' & ').trim();
+        const catAngle = {};  // sudut panel dinding per kategori, dipakai untuk menempatkan kartu skill
+
         const panels = [];
         const panelData = [
-            { t: "LOGIKA &\nPEMROGRAMAN",     c: "#4aa8ff" },
-            { t: "INOVASI &\nTEKNOLOGI",      c: "#00ff88" },
-            { t: "KREATIVITAS\n& SENI",       c: "#b44dff" },
-            { t: "BAHASA &\nKOMUNIKASI",      c: "#ffaa00" },
-            { t: "PENGETAHUAN\nUMUM & SAINS", c: "#00e5ff" },
+            { t: "LOGIKA &\nPEMROGRAMAN",     c: "#4aa8ff", n: "Logika & Pemrograman" },
+            { t: "INOVASI &\nTEKNOLOGI",      c: "#00ff88", n: "Inovasi & Teknologi" },
+            { t: "KREATIVITAS\n& SENI",       c: "#b44dff", n: "Kreativitas & Seni" },
+            { t: "BAHASA &\nKOMUNIKASI",      c: "#ffaa00", n: "Bahasa & Komunikasi" },
+            { t: "PENGETAHUAN\nUMUM & SAINS", c: "#00e5ff", n: "Pengetahuan Umum & Sains" },
         ];
         panelData.forEach((d, i) => {
             const th = THREE.MathUtils.degToRad(-60 + (120 * i) / (panelData.length - 1));
+            catAngle[normCat(d.n)] = th;
             const p = new THREE.Mesh(
                 new THREE.PlaneGeometry(4.6, 2.8),
                 new THREE.MeshBasicMaterial({ map: makeLabel(d.t, d.c), side: THREE.DoubleSide })
@@ -380,19 +385,44 @@ threejs_code = r"""
         }
 
         const skillCards = [];
-        const perRing = 12;
+        const slotCount = {};  // jumlah kartu yang sudah ditempatkan per kategori
+        const otherTotal = rawData.filter(it => catAngle[normCat(it.Kategori)] === undefined).length;
+        let otherIdx = 0;
         rawData.forEach((item, i) => {
-            const ring = Math.floor(i / perRing);
-            const inRing = Math.min(perRing, rawData.length - ring * perRing);
-            const idx = i % perRing;
-            const a = (idx / inRing) * Math.PI * 2 + ring * 0.3;
-            const rad = 6.5 + ring * 2.6;
-            const y = 2.2 + (idx % 3) * 0.9;
+            const key = normCat(item.Kategori);
+            let x, y, z;
+            if (catAngle[key] !== undefined) {
+                // Dekat panel kategorinya: 2 kolom x 2 baris di depan panel dinding,
+                // lapisan berikutnya bergeser ke arah tengah ruangan.
+                const k = slotCount[key] || 0;
+                slotCount[key] = k + 1;
+                // Lapisan 0 (terdekat panel): 2 kolom x 2 baris. Lapisan berikutnya
+                // bergeser ke tengah ruangan: 1 kolom x 2 baris (agar tidak melebar
+                // ke sektor kategori di sebelahnya). Kapasitas rapi: 8 kartu/kategori
+                // (lebih dari itu mulai berdempetan dengan kategori sebelahnya).
+                const layer = k < 4 ? 0 : 1 + Math.floor((k - 4) / 2);
+                const row = k < 4 ? Math.floor(k / 2) : (k - 4) % 2;
+                const rad = Math.max(3.5, (R - 3.4) - layer * 3.0);
+                const th = layer === 0
+                    ? catAngle[key] + ((k % 2) - 0.5) * (2.9 / rad)  // jarak antar kolom ~2.9 m
+                    : catAngle[key];
+                x = Math.sin(th) * rad;
+                z = -Math.cos(th) * rad;
+                y = row * 1.5;
+            } else {
+                // Kategori tidak dikenal: cincin di sekitar pohon pengetahuan
+                const a = (otherIdx / Math.max(1, otherTotal)) * Math.PI * 2;
+                const rad = 6.5;
+                x = Math.sin(a) * rad;
+                z = Math.cos(a) * rad;
+                y = 2.2 + (otherIdx % 3) * 0.9;
+                otherIdx++;
+            }
             const m = new THREE.Mesh(
                 new THREE.PlaneGeometry(2.6, 1.3),
                 new THREE.MeshBasicMaterial({ map: makeSkillCard(item), side: THREE.DoubleSide, transparent: true })
             );
-            m.position.set(Math.sin(a) * rad, y, Math.cos(a) * rad);
+            m.position.set(x, y, z);
             m.userData = { item: item, baseY: y, phase: i };
             scene.add(m);
             skillCards.push(m);
@@ -562,5 +592,11 @@ threejs_code = threejs_code.replace("__SOURCE__", sumber_data).replace(
     "__SKILLS_JSON__", skills_json
 )
 
-# Merender Komponen 3D ke dalam Streamlit
-components.html(threejs_code, height=800, scrolling=False)
+# Merender Komponen 3D ke dalam Streamlit.
+# st.iframe menggantikan st.components.v1.html (yang akan dihapus); fungsi lama
+# hanya dipakai jika versi Streamlit di server belum punya st.iframe.
+# Tinggi harus angka (px) karena isi memakai 100vh.
+if hasattr(st, "iframe"):
+    st.iframe(threejs_code, width="stretch", height=800)
+else:
+    components.html(threejs_code, height=800, scrolling=False)
