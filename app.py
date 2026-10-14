@@ -1,236 +1,169 @@
-import datetime
-import pandas as pd
 import streamlit as st
-import gspread
-from google.oauth2.service_account import Credentials
+import streamlit.components.v1 as components
 
-# Konfigurasi Halaman & Sembunyikan Elemen Bawaan Streamlit
+# Konfigurasi Halaman & Full Screen Layout
 st.set_page_config(
-    page_title="Konsol Hologram Perpustakaan Gemini",
+    page_title="Perpustakaan 3D Virtual Gemini",
     page_icon="🏛️",
     layout="wide",
 )
 
-# Custom CSS: Desain Persis Seperti Panel Hologram Konsol di Gambar
-st.markdown("""
+# Custom CSS untuk Menghilangkan Sidebar, Header, dan Footer Bawaan Streamlit
+st.markdown(
+    """
     <style>
-    /* Sembunyikan Header, Footer, dan Menu Bawaan Streamlit */
     #MainMenu {visibility: hidden;}
     header {visibility: hidden;}
     footer {visibility: hidden;}
-    
-    /* Latar Belakang Konsol Ruang Digital Gelap Futuristik */
     .stApp {
-        background: radial-gradient(circle at 50% 30%, #08111e 0%, #03070d 100%);
-        color: #c9d1d9;
-        font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+        background-color: #03070d;
+        overflow: hidden;
     }
-    
-    /* Header Utama Bergaya Hologram Ruang Kendali */
-    .holo-header {
-        background: rgba(13, 25, 43, 0.75);
-        border: 1px solid rgba(0, 243, 255, 0.4);
-        padding: 25px;
-        border-radius: 16px;
-        text-align: center;
-        box-shadow: 0 0 30px rgba(0, 243, 255, 0.25);
-        backdrop-filter: blur(12px);
-        margin-bottom: 25px;
-    }
-    .holo-title {
-        color: #00f3ff;
-        font-size: 2.2rem;
-        font-weight: 800;
-        letter-spacing: 1px;
-        text-shadow: 0 0 15px rgba(0, 243, 255, 0.8);
-        margin: 0;
-    }
-    .holo-subtitle {
-        color: #8ab4f8;
-        font-size: 1.05rem;
-        margin-top: 8px;
-    }
-
-    /* Panel Konsol Input Hologram */
-    .console-panel {
-        background: rgba(10, 18, 30, 0.85);
-        border: 1px solid rgba(0, 243, 255, 0.3);
-        padding: 25px;
-        border-radius: 14px;
-        box-shadow: inset 0 0 20px rgba(0, 243, 255, 0.08), 0 8px 32px rgba(0, 0, 0, 0.5);
-        backdrop-filter: blur(10px);
-        margin-bottom: 30px;
-    }
-
-    /* Kartu Pengetahuan Hologram per Sayap */
-    .skill-holo-card {
-        background: linear-gradient(135deg, rgba(15, 28, 45, 0.9) 0%, rgba(8, 15, 25, 0.95) 100%);
-        padding: 22px;
-        border-radius: 12px;
-        border-left: 5px solid #00f3ff;
-        border-top: 1px solid rgba(0, 243, 255, 0.2);
-        border-right: 1px solid rgba(0, 243, 255, 0.2);
-        border-bottom: 1px solid rgba(0, 243, 255, 0.2);
-        margin-bottom: 18px;
-        box-shadow: 0 6px 20px rgba(0, 0, 0, 0.6);
-        transition: all 0.3s ease;
-    }
-    .skill-holo-card:hover {
-        border-left-color: #ff007f;
-        box-shadow: 0 0 25px rgba(0, 243, 255, 0.4);
-        transform: translateY(-2px);
-    }
-
-    /* Kotak Metrik Konsol */
-    .stMetric {
-        background: rgba(13, 25, 43, 0.8);
-        padding: 15px;
-        border-radius: 12px;
-        border: 1px solid rgba(0, 243, 255, 0.25);
-        box-shadow: 0 0 15px rgba(0, 243, 255, 0.1);
-    }
-
-    /* Tombol Interaktif Konsol */
-    .stButton>button {
-        background: linear-gradient(90deg, #007acc 0%, #00f3ff 100%);
-        color: #03070d;
-        font-weight: 800;
-        border: none;
-        border-radius: 8px;
-        padding: 11px 20px;
-        box-shadow: 0 0 15px rgba(0, 243, 255, 0.5);
-        transition: all 0.3s ease;
-    }
-    .stButton>button:hover {
-        opacity: 0.95;
-        box-shadow: 0 0 25px rgba(0, 243, 255, 0.9);
+    /* Memperluas area tampilan agar memenuhi layar */
+    .block-container {
+        padding: 0 !important;
+        max-width: 100% !important;
     }
     </style>
-""", unsafe_allow_html=True)
+""",
+    unsafe_allow_html=True,
+)
 
-# Header Utama Hologram
-st.markdown("""
-    <div class="holo-header">
-        <p class="holo-title">🏛️ PERPUSTAKAAN VIRTUAL GEMINI: KONSOL KENDALI</p>
-        <p class="holo-subtitle">Peta Pengetahuan, Logika Pemrograman, dan Evolusi Keterampilan Interaktif</p>
-    </div>
-""", unsafe_allow_html=True)
-
-# Fungsi Koneksi Google Sheets
-@st.cache_resource
-def init_connection():
-    try:
-        creds_dict = dict(st.secrets["gcp_service_account"])
-        scopes = [
-            "https://www.googleapis.com/auth/spreadsheets",
-            "https://www.googleapis.com/auth/drive"
-        ]
-        credentials = Credentials.from_service_account_info(creds_dict, scopes=scopes)
-        client = gspread.authorize(credentials)
-        sheet = client.open("Database_Skill_Gemini").sheet1
-        return sheet
-    except Exception as e:
-        return None
-
-sheet = init_connection()
-
-# Memuat Data dari Google Sheets
-df = pd.DataFrame()
-if sheet:
-    try:
-        data = sheet.get_all_records()
-        if data:
-            df = pd.DataFrame(data)
-    except Exception as e:
-        pass
-
-# Fallback Data Awal Jika Kosong
-if df.empty or "Skill" not in df.columns:
-    df = pd.DataFrame([
-        {
-            "Kategori": "Logika & Pemrograman",
-            "Skill": "Python & Streamlit App Development",
-            "Level": 95,
-            "Tanggal": "2026-07-15",
-            "Deskripsi": "Pengembangan konsol web operasional dan sinkronisasi cloud database."
+# HTML & Three.js untuk Merender Ruangan Fisik 3D Interaktif
+threejs_code = """
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #03070d; font-family: 'Segoe UI', sans-serif; }
+        #canvas-container { width: 100vw; height: 100vh; position: absolute; top: 0; left: 0; }
+        .holo-overlay {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            text-align: center;
+            color: #00f3ff;
+            text-shadow: 0 0 15px rgba(0,243,255,0.8);
+            pointer-events: none;
+            z-index: 10;
         }
-    ])
+        .holo-overlay h1 { margin: 0; font-size: 1.8rem; letter-spacing: 2px; }
+        .holo-overlay p { margin: 5px 0 0; color: #8ab4f8; font-size: 0.95rem; }
+    </style>
+</head>
+<body>
+    <div class="holo-overlay">
+        <h1>🏛️ RUANG PERPUSTAKAAN 3D VIRTUAL GEMINI</h1>
+        <p>Evolusi Peta Pengetahuan & Keterampilan • Interaktif 3D Space</p>
+    </div>
+    <div id="canvas-container"></div>
 
-# ==================== KONSOL PANEL INPUT (TANPA SIDEBAR) ====================
-st.markdown('<div class="console-panel">', unsafe_allow_html=True)
-st.markdown("### ➕ Terminal Input: Daftarkan Skill & Pengetahuan Baru")
+    <!-- Pustaka Three.js CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        // Inisialisasi Scene, Kamera, dan Renderer 3D
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+        scene.fog = new THREE.FogExp2(0x03070d, 0.03);
 
-with st.form("add_skill_form_holo", clear_on_submit=True):
-    col_f1, col_f2, col_f3 = st.columns([2, 2, 1])
-    
-    with col_f1:
-        new_kategori = st.selectbox(
-            "Sayap / Ruang Perpustakaan",
-            ["Logika & Pemrograman", "Inovasi & Teknologi", "Kreativitas & Seni", "Bahasa & Komunikasi", "Pengetahuan Umum & Sains"]
-        )
-        new_skill = st.text_input("Nama Skill / Pengetahuan")
-        
-    with col_f2:
-        new_level = st.slider("Tingkat Penguasaan (%)", 10, 100, 85)
-        new_desc = st.text_area("Catatan / Poin Pembelajaran", height=68)
-        
-    with col_f3:
-        st.markdown("<br><br>", unsafe_allow_html=True)
-        submit_btn = st.form_submit_button("Sinkronkan ke Cloud", use_container_width=True)
+        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(0, 4, 14);
 
-    if submit_btn and new_skill:
-        new_row = [new_kategori, new_skill, int(new_level), str(datetime.date.today()), new_desc]
-        if sheet:
-            try:
-                sheet.append_row(new_row)
-                st.success(f"Skill '{new_skill}' berhasil disinkronkan ke Google Sheets!")
-                st.rerun()
-            except Exception as e:
-                st.error(f"Gagal menyimpan ke Google Sheets: {e}")
-        else:
-            st.error("Koneksi Google Sheets belum terdeteksi. Periksa kembali pengaturan Secrets.")
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        container.appendChild(renderer.domElement);
 
-st.markdown('</div>', unsafe_allow_html=True)
+        // Pencahayaan Ruangan Neon
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
+        scene.add(ambientLight);
 
-# Statistik Konsol Hologram
-col1, col2, col3 = st.columns(3)
-with col1:
-    st.metric("Total Kategori Aktif", len(df["Kategori"].unique()) if not df.empty else 0)
-with col2:
-    st.metric("Total Skill Tercatat", len(df) if not df.empty else 0)
-with col3:
-    avg_level = int(df["Level"].mean()) if not df.empty and "Level" in df.columns else 0
-    st.metric("Rata-rata Penguasaan", f"{avg_level}%")
+        const pointLight = new THREE.PointLight(0x00f3ff, 2.5, 50);
+        pointLight.position.set(0, 10, 0);
+        scene.add(pointLight);
 
-st.markdown("---")
-st.subheader("📚 Arsip Sayap & Panel Pengetahuan Hologram")
+        // Kubah Raksasa (Dome Kaca Ruangan)
+        const domeGeo = new THREE.SphereGeometry(30, 32, 16);
+        const domeMat = new THREE.MeshBasicMaterial({ color: 0x1f2937, wireframe: true, transparent: true, opacity: 0.12 });
+        const dome = new THREE.Mesh(domeGeo, domeMat);
+        scene.add(dome);
 
-# Filter Kategori Sayap Perpustakaan
-categories = ["Semua Ruang"] + list(df["Kategori"].unique()) if "Kategori" in df.columns else ["Semua Ruang"]
-selected_category = st.selectbox("Pilih Ruang Kategori Sayap", categories)
+        // Lantai Sirkuit Bercahaya
+        const gridHelper = new THREE.GridHelper(50, 50, 0x00f3ff, 0x111927);
+        gridHelper.position.y = -1;
+        scene.add(gridHelper);
 
-if selected_category == "Semua Ruang":
-    filtered_df = df
-else:
-    filtered_df = df[df["Kategori"] == selected_category]
+        // Pohon Pengetahuan Digital di Tengah Ruangan
+        const trunkGeo = new THREE.CylinderGeometry(0.3, 0.9, 7, 8);
+        const trunkMat = new THREE.MeshBasicMaterial({ color: 0x00f3ff, wireframe: true });
+        const centralTree = new THREE.Mesh(trunkGeo, trunkMat);
+        centralTree.position.set(0, 3.5, 0);
+        scene.add(centralTree);
 
-# Render Kartu Hologram
-if not filtered_df.empty:
-    for index, row in filtered_df.iterrows():
-        st.markdown(f"""
-        <div class="skill-holo-card">
-            <h3 style="margin-top: 0; color: #00f3ff; display: flex; justify-content: space-between; align-items: center;">
-                <span>📖 {row.get('Skill', 'Skill')}</span>
-                <span style="font-size: 0.9rem; color: #03070d; background: #00f3ff; padding: 3px 12px; border-radius: 20px; font-weight: 700;">
-                    {row.get('Level', 0)}% Penguasaan
-                </span>
-            </h3>
-            <p style="color: #8ab4f8; font-size: 0.9rem; margin-bottom: 8px;">
-                <b>Kategori Sayap:</b> <span style="color: #c9d1d9;">{row.get('Kategori', '-')}</span> &nbsp;|&nbsp; 
-                <b>Dicatat Pada:</b> <span style="color: #c9d1d9;">{row.get('Tanggal', '-')}</span>
-            </p>
-            <p style="color: #e6edf3; margin-bottom: 0; line-height: 1.5;">{row.get('Deskripsi', '-')}</p>
-        </div>
-        """, unsafe_allow_html=True)
-else:
-    st.info("Belum ada data skill di kategori sayap ini.")
+        // Panel-Panel Hologram Mengambang (Merepresentasikan Kategori Skill)
+        const panels = [];
+        const panelData = [
+            { title: "Logika & Pemrograman", level: "95%", color: 0x00f3ff, pos: [-6, 3, -4] },
+            { title: "Inovasi & Teknologi", level: "90%", color: 0x00ff88, pos: [6, 3, -4] },
+            { title: "Kreativitas & Seni", level: "92%", color: 0x9900ff, pos: [-6, 1, 1] },
+            { title: "Bahasa & Komunikasi", level: "88%", color: 0xffaa00, pos: [6, 1, 1] }
+        ];
+
+        panelData.forEach((data, index) => {
+            const panelGeo = new THREE.BoxGeometry(3.6, 1.8, 0.1);
+            const panelMat = new THREE.MeshStandardMaterial({ 
+                color: data.color, 
+                transparent: true, 
+                opacity: 0.8,
+                emissive: data.color,
+                emissiveIntensity: 0.3
+            });
+            const panel = new THREE.Mesh(panelGeo, panelMat);
+            panel.position.set(...data.pos);
+            scene.add(panel);
+            panels.push(panel);
+        });
+
+        // Interaksi Gerakan Kamera Berdasarkan Mouse
+        let mouseX = 0, mouseY = 0;
+        document.addEventListener('mousemove', (e) => {
+            mouseX = (e.clientX - window.innerWidth / 2) * 0.0004;
+            mouseY = (e.clientY - window.innerHeight / 2) * 0.0004;
+        });
+
+        // Animasi Loop (Pergerakan Objek 3D secara Real-time)
+        function animate() {
+            requestAnimationFrame(animate);
+
+            // Putar pohon inti digital
+            centralTree.rotation.y += 0.008;
+
+            // Efek mengambang pada panel hologram
+            panels.forEach((p, idx) => {
+                p.position.y += Math.sin(Date.now() * 0.002 + idx) * 0.002;
+            });
+
+            // Gerakan halus kamera mengikuti kursor
+            camera.position.x += (mouseX * 6 - camera.position.x) * 0.05;
+            camera.position.y += (-mouseY * 6 + 4 - camera.position.y) * 0.05;
+            camera.lookAt(0, 2, 0);
+
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        // Penyesuaian Ukuran Layar Otomatis
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+</html>
+"""
+
+# Merender Komponen 3D ke dalam Streamlit
+components.html(threejs_code, height=720, scrolling=False)
