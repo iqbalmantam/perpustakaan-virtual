@@ -2,6 +2,10 @@ import datetime
 import pandas as pd
 import streamlit as st
 
+# Opsional: Jika menggunakan gspread untuk Google Sheets
+import gspread
+from google.oauth2.service_account import Credentials
+
 # Konfigurasi Halaman
 st.set_page_config(
     page_title="Perpustakaan Pengetahuan & Skill Gemini",
@@ -25,54 +29,82 @@ st.title(
     "🏛️ Perpustakaan Virtual Gemini: Peta Pengetahuan & Evolusi Keterampilan"
 )
 st.markdown(
-    "Ruang interaktif untuk merangkum, memantau, dan mengembangkan setiap ilmu, logika pemrograman, serta skill baru yang dipelajari bersama AI."
+    "Ruang interaktif berbasis cloud untuk merangkum, memantau, dan mengembangkan setiap ilmu dan skill yang dipelajari bersama AI."
 )
 
-# Inisialisasi Database Sederhana di Session State
-if "skills_data" not in st.session_state:
-    st.session_state.skills_data = [
-        {
-            "Kategori": "Logika & Pemrograman",
-            "Skill": "Python & Streamlit App Development",
-            "Level": 95,
-            "Tanggal": "2026-07-15",
-            "Deskripsi": (
-                "Pengembangan aplikasi web operasional, manajemen database,"
-                " dan kalkulator otomatis."
-            ),
-        },
-        {
-            "Kategori": "Inovasi & Teknologi",
-            "Skill": "OSINT & Background Verification Tools",
-            "Level": 90,
-            "Tanggal": "2026-08-10",
-            "Deskripsi": (
-                "Teknik ekstraksi metadata dan sistem verifikasi data kandidat."
-            ),
-        },
-        {
-            "Kategori": "Kreativitas & Seni",
-            "Skill": "Cinematic & Wuxia Prompt Engineering",
-            "Level": 92,
-            "Tanggal": "2026-06-20",
-            "Deskripsi": (
-                "Penyusunan prompt visual sinematik dengan estetika bela diri dan"
-                " Wuxia."
-            ),
-        },
-        {
-            "Kategori": "Logika & Pemrograman",
-            "Skill": "Google Sheets & Cloud Database Integration",
-            "Level": 88,
-            "Tanggal": "2026-09-05",
-            "Deskripsi": (
-                "Sinkronisasi data real-time untuk form inspeksi dan laporan"
-                " harian."
-            ),
-        },
-    ]
 
-df = pd.DataFrame(st.session_state.skills_data)
+# Fungsi untuk menghubungkan ke Google Sheets via Streamlit Secrets
+@st.cache_resource
+def init_connection():
+    try:
+        # Mengambil kredensial dari st.secrets (disetel di panel Streamlit Cloud)
+        creds_dict = dict(st.secrets["gcp_service_account"])
+        scopes = [
+            "https://www.googleapis.com/auth/spreadsheets",
+            "https://www.googleapis.com/auth/drive",
+        ]
+        credentials = Credentials.from_service_account_info(
+            creds_dict, scopes=scopes
+        )
+        client = gspread.authorize(credentials)
+        # Nama file Google Sheets Anda di Drive
+        sheet = client.open("Database_Skill_Gemini").sheet1
+        return sheet
+    except Exception as e:
+        return None
+
+
+sheet = init_connection()
+
+# Memuat data dari Google Sheets (jika gagal, gunakan fallback data sesi)
+if sheet:
+    try:
+        data = sheet.get_all_records()
+        df = pd.DataFrame(data)
+        if df.empty or "Skill" not in df.columns:
+            # Fallback data awal jika sheet masih kosong
+            df = pd.DataFrame(
+                [
+                    {
+                        "Kategori": "Logika & Pemrograman",
+                        "Skill": "Python & Streamlit App Development",
+                        "Level": 95,
+                        "Tanggal": "2026-07-15",
+                        "Deskripsi": (
+                            "Pengembangan aplikasi web operasional dan"
+                            " manajemen database."
+                        ),
+                    }
+                ]
+            )
+    except Exception:
+        df = pd.DataFrame(
+            [
+                {
+                    "Kategori": "Logika & Pemrograman",
+                    "Skill": "Python & Streamlit App Development",
+                    "Level": 95,
+                    "Tanggal": "2026-07-15",
+                    "Deskripsi": "Koneksi Google Sheets belum dikonfigurasi.",
+                }
+            ]
+        )
+else:
+    # Mode cadangan session state jika secrets belum diatur
+    if "skills_data" not in st.session_state:
+        st.session_state.skills_data = [
+            {
+                "Kategori": "Logika & Pemrograman",
+                "Skill": "Python & Streamlit App Development",
+                "Level": 95,
+                "Tanggal": "2026-07-15",
+                "Deskripsi": (
+                    "Pengembangan aplikasi web operasional dan kalkulator"
+                    " otomatis."
+                ),
+            }
+        ]
+    df = pd.DataFrame(st.session_state.skills_data)
 
 # Sidebar: Tambah Perkembangan Skill Baru
 st.sidebar.header("➕ Catat Perkembangan Skill Baru")
@@ -90,19 +122,40 @@ with st.sidebar.form("add_skill_form"):
     new_skill = st.text_input("Nama Skill / Pengetahuan")
     new_level = st.slider("Tingkat Penguasaan (%)", 10, 100, 85)
     new_desc = st.text_area("Catatan / Poin Pembelajaran")
-    submit_btn = st.form_submit_button("Simpan ke Perpustakaan")
+    submit_btn = st.form_submit_button("Simpan ke Google Sheets")
 
     if submit_btn and new_skill:
-        new_entry = {
-            "Kategori": new_kategori,
-            "Skill": new_skill,
-            "Level": new_level,
-            "Tanggal": str(datetime.date.today()),
-            "Deskripsi": new_desc,
-        }
-        st.session_state.skills_data.append(new_entry)
-        st.success(f"Skill '{new_skill}' berhasil ditambahkan ke perpustakaan!")
-        st.rerun()
+        new_row = [
+            new_kategori,
+            new_skill,
+            int(new_level),
+            str(datetime.date.today()),
+            new_desc,
+        ]
+        if sheet:
+            try:
+                sheet.append_row(new_row)
+                st.success(
+                    f"Skill '{new_skill}' berhasil disimpan ke Google Sheets!"
+                )
+                st.rerun()
+            except Exception as e:
+                st.error(f"Gagal menyimpan ke Google Sheets: {e}")
+        else:
+            # Simpan ke session jika sheet tidak aktif
+            st.session_state.skills_data.append(
+                {
+                    "Kategori": new_kategori,
+                    "Skill": new_skill,
+                    "Level": new_level,
+                    "Tanggal": str(datetime.date.today()),
+                    "Deskripsi": new_desc,
+                }
+            )
+            st.success(
+                f"Skill '{new_skill}' berhasil ditambahkan secara lokal!"
+            )
+            st.rerun()
 
 # Statistik Ringkas Perpustakaan
 col1, col2, col3 = st.columns(3)
@@ -127,7 +180,7 @@ if selected_category == "Semua Ruang":
 else:
     filtered_df = df[df["Kategori"] == selected_category]
 
-# Render Kartu Pengetahuan (Visual Rak Buku Digital)
+# Render Kartu Pengetahuan
 for index, row in filtered_df.iterrows():
     st.markdown(
         f"""
@@ -139,8 +192,3 @@ for index, row in filtered_df.iterrows():
     """,
         unsafe_allow_html=True,
     )
-
-st.markdown("---")
-st.info(
-    "💡 **Tips Pengembangan:** Anda dapat terus menambahkan *skill* baru melalui panel di sebelah kiri setiap kali mempelajari topik atau kode baru bersama Gemini. Program ini juga bisa di-deploy gratis ke **Streamlit Community Cloud** agar dapat diakses dari perangkat mana saja!"
-)
