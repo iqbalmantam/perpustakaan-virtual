@@ -38,20 +38,47 @@ SHEET_NAME = "Database_Skill_Gemini"
 KOLOM = ["Kategori", "Skill", "Level", "Tanggal", "Deskripsi"]
 
 # Data contoh jika Google Sheets belum terhubung / gagal dibaca
+# Juga dipakai untuk mengisi otomatis Google Sheets jika masih kosong
 FALLBACK = [
     {
         "Kategori": "Logika & Pemrograman",
         "Skill": "Python & Streamlit App Development",
         "Level": 95,
         "Tanggal": "2026-07-15",
-        "Deskripsi": "Pengembangan aplikasi web operasional dan kalkulator otomatis.",
+        "Deskripsi": (
+            "Pengembangan aplikasi web operasional warehouse, timesheet"
+            " matrix, dan kalkulator manpower cost."
+        ),
     },
     {
         "Kategori": "Inovasi & Teknologi",
-        "Skill": "OSINT & Background Verification",
+        "Skill": "OSINT & Candidate Background Verification",
         "Level": 90,
         "Tanggal": "2026-08-10",
-        "Deskripsi": "Teknik ekstraksi metadata dan verifikasi data.",
+        "Deskripsi": (
+            "Teknik ekstraksi metadata, analisis data publik, dan"
+            " pembangunan web OSINT."
+        ),
+    },
+    {
+        "Kategori": "Kreativitas & Seni",
+        "Skill": "Cinematic & Wuxia Prompt Engineering",
+        "Level": 92,
+        "Tanggal": "2026-06-20",
+        "Deskripsi": (
+            "Penyusunan prompt visual sinematik dengan estetika bela diri"
+            " Wuxia dan aksi."
+        ),
+    },
+    {
+        "Kategori": "Logika & Pemrograman",
+        "Skill": "Google Sheets & Cloud Database Integration",
+        "Level": 88,
+        "Tanggal": "2026-09-05",
+        "Deskripsi": (
+            "Sinkronisasi data real-time, manajemen database cloud, dan"
+            " pelacakan rak warehouse."
+        ),
     },
 ]
 
@@ -62,16 +89,27 @@ FALLBACK = [
 def get_sheets_data():
     try:
         creds_dict = dict(st.secrets["gcp_service_account"])
+        # spreadsheets (baca+tulis) hanya diperlukan untuk isi otomatis saat sheet kosong
         scopes = [
-            "https://www.googleapis.com/auth/spreadsheets.readonly",
+            "https://www.googleapis.com/auth/spreadsheets",
             "https://www.googleapis.com/auth/drive.readonly",
         ]
         credentials = Credentials.from_service_account_info(creds_dict, scopes=scopes)
         client = gspread.authorize(credentials)
-        data = client.open(SHEET_NAME).sheet1.get_all_records()
+        sheet = client.open(SHEET_NAME).sheet1
+        data = sheet.get_all_records()
         if data:
             return pd.DataFrame(data), "sheets"
-        logging.warning("Google Sheets kosong, memakai data contoh.")
+
+        # Sheet kosong (hanya header): isi otomatis dengan rangkuman skill awal
+        logging.warning("Google Sheets kosong, mengisi data awal.")
+        try:
+            sheet.append_rows([[item[k] for k in KOLOM] for item in FALLBACK])
+            data = sheet.get_all_records()
+            if data:
+                return pd.DataFrame(data), "sheets"
+        except Exception as e:  # mis. service account hanya punya akses Viewer
+            logging.warning("Gagal mengisi data awal ke Google Sheets: %s", e)
     except Exception as e:  # alasan lengkap hanya ke log server, bukan ke pengunjung
         logging.warning("Gagal membaca Google Sheets: %s", e)
     return pd.DataFrame(FALLBACK), "fallback"
