@@ -171,6 +171,11 @@ threejs_code = r"""
         }
         #info-box h3 { margin: 0 0 4px 0; color: #00f3ff; font-size: 1.1rem; }
         #info-box p { margin: 0; font-size: 0.9rem; color: #8ab4f8; }
+        .watermark {
+            position: absolute; bottom: 12px; left: 16px; z-index: 5;
+            color: rgba(138, 180, 248, 0.55); font-size: 0.78rem; letter-spacing: 1px;
+            text-shadow: 0 0 8px rgba(0, 243, 255, 0.35); pointer-events: none; user-select: none;
+        }
         /* Panel detail skill (muncul saat kartu diklik) */
         #detail {
             position: absolute; right: 20px; top: 90px; width: 300px; z-index: 20;
@@ -219,6 +224,7 @@ threejs_code = r"""
         <div id="d-date"></div>
         <button id="d-back" type="button">← Kembali ke ruangan</button>
     </div>
+    <div class="watermark">Developed by iqbalmantam</div>
     <div class="hint">Seret = putar • Scroll = zoom • Klik kartu = zoom detail • Esc = kembali</div>
     <div id="canvas-container"></div>
 
