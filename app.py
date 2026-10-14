@@ -6,12 +6,12 @@ from google.oauth2.service_account import Credentials
 
 # Konfigurasi Halaman & Sembunyikan Elemen Bawaan Streamlit
 st.set_page_config(
-    page_title="Perpustakaan Virtual Gemini: Konsol AI",
+    page_title="Konsol Hologram Perpustakaan Gemini",
     page_icon="🏛️",
     layout="wide",
 )
 
-# Custom CSS Bergaya Konsol Hologram & Ruang Perpustakaan Futuristik
+# Custom CSS: Desain Persis Seperti Panel Hologram Konsol di Gambar
 st.markdown("""
     <style>
     /* Sembunyikan Header, Footer, dan Menu Bawaan Streamlit */
@@ -19,84 +19,102 @@ st.markdown("""
     header {visibility: hidden;}
     footer {visibility: hidden;}
     
-    /* Tema Utama: Latar Belakang Gelap Luar Angkasa / Konsol Digital */
+    /* Latar Belakang Konsol Ruang Digital Gelap Futuristik */
     .stApp {
-        background-color: #050814;
+        background: radial-gradient(circle at 50% 30%, #08111e 0%, #03070d 100%);
         color: #c9d1d9;
-        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
     }
     
-    /* Judul Utama Bergaya Hologram Neon */
-    .hero-title {
+    /* Header Utama Bergaya Hologram Ruang Kendali */
+    .holo-header {
+        background: rgba(13, 25, 43, 0.75);
+        border: 1px solid rgba(0, 243, 255, 0.4);
+        padding: 25px;
+        border-radius: 16px;
         text-align: center;
+        box-shadow: 0 0 30px rgba(0, 243, 255, 0.25);
+        backdrop-filter: blur(12px);
+        margin-bottom: 25px;
+    }
+    .holo-title {
         color: #00f3ff;
         font-size: 2.2rem;
         font-weight: 800;
-        text-shadow: 0 0 15px rgba(0, 243, 255, 0.6);
-        margin-bottom: 5px;
+        letter-spacing: 1px;
+        text-shadow: 0 0 15px rgba(0, 243, 255, 0.8);
+        margin: 0;
     }
-    .hero-subtitle {
-        text-align: center;
-        color: #8b949e;
-        font-size: 1.1rem;
-        margin-bottom: 30px;
+    .holo-subtitle {
+        color: #8ab4f8;
+        font-size: 1.05rem;
+        margin-top: 8px;
     }
 
-    /* Kotak Panel Konsol / Form Input */
-    .console-box {
-        background: rgba(13, 17, 23, 0.85);
+    /* Panel Konsol Input Hologram */
+    .console-panel {
+        background: rgba(10, 18, 30, 0.85);
         border: 1px solid rgba(0, 243, 255, 0.3);
         padding: 25px;
-        border-radius: 15px;
-        box-shadow: 0 0 20px rgba(0, 243, 255, 0.15);
+        border-radius: 14px;
+        box-shadow: inset 0 0 20px rgba(0, 243, 255, 0.08), 0 8px 32px rgba(0, 0, 0, 0.5);
+        backdrop-filter: blur(10px);
         margin-bottom: 30px;
     }
 
-    /* Kartu Pengetahuan Bergaya Panel Hologram */
-    .skill-card {
-        background: linear-gradient(135deg, rgba(22, 27, 34, 0.9) 0%, rgba(13, 17, 23, 0.95) 100%);
+    /* Kartu Pengetahuan Hologram per Sayap */
+    .skill-holo-card {
+        background: linear-gradient(135deg, rgba(15, 28, 45, 0.9) 0%, rgba(8, 15, 25, 0.95) 100%);
         padding: 22px;
         border-radius: 12px;
-        border: 1px solid rgba(88, 166, 255, 0.3);
+        border-left: 5px solid #00f3ff;
+        border-top: 1px solid rgba(0, 243, 255, 0.2);
+        border-right: 1px solid rgba(0, 243, 255, 0.2);
+        border-bottom: 1px solid rgba(0, 243, 255, 0.2);
         margin-bottom: 18px;
-        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+        box-shadow: 0 6px 20px rgba(0, 0, 0, 0.6);
         transition: all 0.3s ease;
     }
-    .skill-card:hover {
-        border-color: #00f3ff;
-        box-shadow: 0 0 20px rgba(0, 243, 255, 0.25);
+    .skill-holo-card:hover {
+        border-left-color: #ff007f;
+        box-shadow: 0 0 25px rgba(0, 243, 255, 0.4);
+        transform: translateY(-2px);
     }
 
-    /* Styling Metrik Kosmik */
+    /* Kotak Metrik Konsol */
     .stMetric {
-        background: rgba(22, 27, 34, 0.8);
+        background: rgba(13, 25, 43, 0.8);
         padding: 15px;
-        border-radius: 10px;
-        border: 1px solid rgba(88, 166, 255, 0.2);
-        box-shadow: inset 0 0 10px rgba(0, 243, 255, 0.05);
+        border-radius: 12px;
+        border: 1px solid rgba(0, 243, 255, 0.25);
+        box-shadow: 0 0 15px rgba(0, 243, 255, 0.1);
     }
-    
-    /* Tombol Konsol */
+
+    /* Tombol Interaktif Konsol */
     .stButton>button {
         background: linear-gradient(90deg, #007acc 0%, #00f3ff 100%);
-        color: #050814;
-        font-weight: bold;
+        color: #03070d;
+        font-weight: 800;
         border: none;
         border-radius: 8px;
-        padding: 10px 20px;
-        box-shadow: 0 0 10px rgba(0, 243, 255, 0.4);
-        transition: 0.3s;
+        padding: 11px 20px;
+        box-shadow: 0 0 15px rgba(0, 243, 255, 0.5);
+        transition: all 0.3s ease;
     }
     .stButton>button:hover {
-        opacity: 0.9;
-        box-shadow: 0 0 20px rgba(0, 243, 255, 0.8);
+        opacity: 0.95;
+        box-shadow: 0 0 25px rgba(0, 243, 255, 0.9);
     }
     </style>
 """, unsafe_allow_html=True)
 
-# Header Visual Ala Konsol Gemini
-st.markdown('<p class="hero-title">🏛️ KONSOL PERPUSTAKAAN VIRTUAL GEMINI</p>', unsafe_allow_html=True)
-st.markdown('<p class="hero-subtitle">Peta Pengetahuan, Logika Pemrograman, dan Evolusi Keterampilan Terintegrasi</p>', unsafe_allow_html=True)
+# Header Utama Hologram
+st.markdown("""
+    <div class="holo-header">
+        <p class="holo-title">🏛️ PERPUSTAKAAN VIRTUAL GEMINI: KONSOL KENDALI</p>
+        <p class="holo-subtitle">Peta Pengetahuan, Logika Pemrograman, dan Evolusi Keterampilan Interaktif</p>
+    </div>
+""", unsafe_allow_html=True)
 
 # Fungsi Koneksi Google Sheets
 @st.cache_resource
@@ -126,7 +144,7 @@ if sheet:
     except Exception as e:
         pass
 
-# Fallback Data Jika Kosong
+# Fallback Data Awal Jika Kosong
 if df.empty or "Skill" not in df.columns:
     df = pd.DataFrame([
         {
@@ -134,15 +152,15 @@ if df.empty or "Skill" not in df.columns:
             "Skill": "Python & Streamlit App Development",
             "Level": 95,
             "Tanggal": "2026-07-15",
-            "Deskripsi": "Pengembangan aplikasi web operasional dan kalkulator otomatis."
+            "Deskripsi": "Pengembangan konsol web operasional dan sinkronisasi cloud database."
         }
     ])
 
-# ==================== KONSOL INPUT (TANPA SIDEBAR / FRAME KIRI) ====================
-st.markdown('<div class="console-box">', unsafe_allow_html=True)
-st.markdown("### ➕ Terminal Input: Catat Perkembangan Skill Baru")
+# ==================== KONSOL PANEL INPUT (TANPA SIDEBAR) ====================
+st.markdown('<div class="console-panel">', unsafe_allow_html=True)
+st.markdown("### ➕ Terminal Input: Daftarkan Skill & Pengetahuan Baru")
 
-with st.form("add_skill_form_hologram", clear_on_submit=True):
+with st.form("add_skill_form_holo", clear_on_submit=True):
     col_f1, col_f2, col_f3 = st.columns([2, 2, 1])
     
     with col_f1:
@@ -158,7 +176,7 @@ with st.form("add_skill_form_hologram", clear_on_submit=True):
         
     with col_f3:
         st.markdown("<br><br>", unsafe_allow_html=True)
-        submit_btn = st.form_submit_button("Simpan ke Cloud", use_container_width=True)
+        submit_btn = st.form_submit_button("Sinkronkan ke Cloud", use_container_width=True)
 
     if submit_btn and new_skill:
         new_row = [new_kategori, new_skill, int(new_level), str(datetime.date.today()), new_desc]
@@ -174,7 +192,7 @@ with st.form("add_skill_form_hologram", clear_on_submit=True):
 
 st.markdown('</div>', unsafe_allow_html=True)
 
-# Statistik Ringkas Konsol
+# Statistik Konsol Hologram
 col1, col2, col3 = st.columns(3)
 with col1:
     st.metric("Total Kategori Aktif", len(df["Kategori"].unique()) if not df.empty else 0)
@@ -185,33 +203,34 @@ with col3:
     st.metric("Rata-rata Penguasaan", f"{avg_level}%")
 
 st.markdown("---")
-st.subheader("📚 Sayap Panel Pengetahuan & Arsip Skill")
+st.subheader("📚 Arsip Sayap & Panel Pengetahuan Hologram")
 
-# Filter Kategori
+# Filter Kategori Sayap Perpustakaan
 categories = ["Semua Ruang"] + list(df["Kategori"].unique()) if "Kategori" in df.columns else ["Semua Ruang"]
-selected_category = st.selectbox("Pilih Ruang Kategori", categories)
+selected_category = st.selectbox("Pilih Ruang Kategori Sayap", categories)
 
 if selected_category == "Semua Ruang":
     filtered_df = df
 else:
     filtered_df = df[df["Kategori"] == selected_category]
 
-# Render Kartu Pengetahuan Bergaya Hologram Panel
+# Render Kartu Hologram
 if not filtered_df.empty:
     for index, row in filtered_df.iterrows():
         st.markdown(f"""
-        <div class="skill-card">
-            <h3 style="margin-top: 0; color: #00f3ff;">📖 {row.get('Skill', 'Skill')} 
-                <span style="float: right; font-size: 16px; color: #58a6ff; background: rgba(0,243,255,0.1); padding: 2px 10px; border-radius: 6px; border: 1px solid rgba(0,243,255,0.3);">
+        <div class="skill-holo-card">
+            <h3 style="margin-top: 0; color: #00f3ff; display: flex; justify-content: space-between; align-items: center;">
+                <span>📖 {row.get('Skill', 'Skill')}</span>
+                <span style="font-size: 0.9rem; color: #03070d; background: #00f3ff; padding: 3px 12px; border-radius: 20px; font-weight: 700;">
                     {row.get('Level', 0)}% Penguasaan
                 </span>
             </h3>
-            <p style="color: #8b949e; font-size: 0.9rem; margin-bottom: 8px;">
-                <b>Kategori:</b> <span style="color: #c9d1d9;">{row.get('Kategori', '-')}</span> &nbsp;|&nbsp; 
+            <p style="color: #8ab4f8; font-size: 0.9rem; margin-bottom: 8px;">
+                <b>Kategori Sayap:</b> <span style="color: #c9d1d9;">{row.get('Kategori', '-')}</span> &nbsp;|&nbsp; 
                 <b>Dicatat Pada:</b> <span style="color: #c9d1d9;">{row.get('Tanggal', '-')}</span>
             </p>
-            <p style="color: #e6edf3; margin-bottom: 0;">{row.get('Deskripsi', '-')}</p>
+            <p style="color: #e6edf3; margin-bottom: 0; line-height: 1.5;">{row.get('Deskripsi', '-')}</p>
         </div>
         """, unsafe_allow_html=True)
 else:
-    st.info("Belum ada data skill di kategori ini.")
+    st.info("Belum ada data skill di kategori sayap ini.")
