@@ -1,5 +1,10 @@
+import logging
+
+import gspread
+import pandas as pd
 import streamlit as st
 import streamlit.components.v1 as components
+from google.oauth2.service_account import Credentials
 
 # Konfigurasi Halaman & Full Screen Layout
 st.set_page_config(
@@ -28,8 +33,78 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
+# ===== Data Skill dari Google Sheets =====
+SHEET_NAME = "Database_Skill_Gemini"
+KOLOM = ["Kategori", "Skill", "Level", "Tanggal", "Deskripsi"]
+
+# Data contoh jika Google Sheets belum terhubung / gagal dibaca
+FALLBACK = [
+    {
+        "Kategori": "Logika & Pemrograman",
+        "Skill": "Python & Streamlit App Development",
+        "Level": 95,
+        "Tanggal": "2026-07-15",
+        "Deskripsi": "Pengembangan aplikasi web operasional dan kalkulator otomatis.",
+    },
+    {
+        "Kategori": "Inovasi & Teknologi",
+        "Skill": "OSINT & Background Verification",
+        "Level": 90,
+        "Tanggal": "2026-08-10",
+        "Deskripsi": "Teknik ekstraksi metadata dan verifikasi data.",
+    },
+]
+
+
+# cache_data + ttl: data di-refresh otomatis tiap 5 menit (cache_resource akan
+# menyimpan data selamanya sampai aplikasi di-reboot).
+@st.cache_data(ttl=300, show_spinner=False)
+def get_sheets_data():
+    try:
+        creds_dict = dict(st.secrets["gcp_service_account"])
+        scopes = [
+            "https://www.googleapis.com/auth/spreadsheets.readonly",
+            "https://www.googleapis.com/auth/drive.readonly",
+        ]
+        credentials = Credentials.from_service_account_info(creds_dict, scopes=scopes)
+        client = gspread.authorize(credentials)
+        data = client.open(SHEET_NAME).sheet1.get_all_records()
+        if data:
+            return pd.DataFrame(data), "sheets"
+        logging.warning("Google Sheets kosong, memakai data contoh.")
+    except Exception as e:  # alasan lengkap hanya ke log server, bukan ke pengunjung
+        logging.warning("Gagal membaca Google Sheets: %s", e)
+    return pd.DataFrame(FALLBACK), "fallback"
+
+
+def bersihkan(df):
+    """Pastikan kolom lengkap, Level numerik 0-100, dan teks bertipe string."""
+    for k in KOLOM:
+        if k not in df.columns:
+            df[k] = ""
+    df = df[KOLOM].copy()
+    df["Level"] = (
+        pd.to_numeric(df["Level"].astype(str).str.replace("%", "", regex=False), errors="coerce")
+        .fillna(0)
+        .clip(0, 100)
+        .round()
+        .astype(int)
+    )
+    for k in ["Kategori", "Skill", "Tanggal", "Deskripsi"]:
+        df[k] = df[k].fillna("").astype(str)
+    df = df[df["Skill"].str.strip() != ""]
+    return df.head(48)  # batasi jumlah kartu agar tetap ringan
+
+
+df, sumber_data = get_sheets_data()
+df = bersihkan(df.copy())
+
+# "</" di-escape supaya isi sel Sheets tidak bisa menutup tag <script> di HTML
+skills_json = df.to_json(orient="records", force_ascii=False).replace("</", "<\\/")
+
 # PENTING: r""" (raw string) dipakai supaya "\n" di dalam JavaScript tidak
-# berubah menjadi baris baru oleh Python.
+# berubah menjadi baris baru oleh Python. Placeholder __SOURCE__ dan
+# __SKILLS_JSON__ diisi lewat .replace() di bagian paling bawah file.
 threejs_code = r"""
 <!DOCTYPE html>
 <html lang="id">
@@ -49,12 +124,25 @@ threejs_code = r"""
             position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%);
             color: #6b8cae; font-size: 0.8rem; pointer-events: none; z-index: 10;
         }
+        #info-box {
+            position: absolute; bottom: 40px; left: 50%; transform: translateX(-50%);
+            background: rgba(13, 25, 43, 0.85); border: 1px solid rgba(0, 243, 255, 0.5);
+            padding: 12px 24px; border-radius: 12px; color: #c9d1d9; text-align: center;
+            box-shadow: 0 0 20px rgba(0, 243, 255, 0.3); backdrop-filter: blur(10px);
+            pointer-events: none; max-width: 600px; z-index: 10;
+        }
+        #info-box h3 { margin: 0 0 4px 0; color: #00f3ff; font-size: 1.1rem; }
+        #info-box p { margin: 0; font-size: 0.9rem; color: #8ab4f8; }
     </style>
 </head>
 <body>
     <div class="holo-overlay">
         <h1>🏛️ RUANG PERPUSTAKAAN 3D VIRTUAL GEMINI</h1>
-        <p>Peta Pengetahuan &amp; Evolusi Keterampilan • Interaktif 3D Space</p>
+        <p id="subtitle">Peta Pengetahuan &amp; Evolusi Keterampilan • Interaktif 3D Space</p>
+    </div>
+    <div id="info-box">
+        <h3 id="info-title"></h3>
+        <p id="info-desc"></p>
     </div>
     <div class="hint">Seret mouse = putar • Scroll = zoom • Klik kanan + seret = geser</div>
     <div id="canvas-container"></div>
@@ -70,6 +158,10 @@ threejs_code = r"""
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
     <script>
         const R = 16; // radius ruangan
+
+        // Data skill dari Python (Google Sheets atau data contoh)
+        const SOURCE = "__SOURCE__";
+        const rawData = __SKILLS_JSON__;
 
         // ===== Scene, Kamera, Renderer =====
         const container = document.getElementById('canvas-container');
@@ -218,6 +310,85 @@ threejs_code = r"""
         title.position.set(0, 6, -(R - 0.8));
         scene.add(title);
 
+        // ===== Kartu Skill dari Google Sheets =====
+        function levelColor(lv) { return lv >= 90 ? "#00ff88" : (lv < 80 ? "#ffaa00" : "#00f3ff"); }
+
+        function makeSkillCard(item) {
+            const color = levelColor(item.Level);
+            const c = document.createElement('canvas');
+            c.width = 512; c.height = 256;
+            const g = c.getContext('2d');
+            g.fillStyle = 'rgba(5,15,30,0.92)';
+            g.fillRect(0, 0, 512, 256);
+            g.strokeStyle = color; g.lineWidth = 6;
+            g.strokeRect(3, 3, 506, 250);
+            g.fillStyle = color; g.textAlign = 'center'; g.textBaseline = 'middle';
+            g.font = 'bold 34px Segoe UI, Arial, sans-serif';
+            // pecah nama skill menjadi maksimal 3 baris
+            const lines = []; let cur = '';
+            String(item.Skill || '').split(' ').forEach(w => {
+                const test = cur ? cur + ' ' + w : w;
+                if (g.measureText(test).width > 440 && cur) { lines.push(cur); cur = w; } else { cur = test; }
+            });
+            if (cur) lines.push(cur);
+            const shown = lines.slice(0, 3);
+            shown.forEach((t, i) => g.fillText(t, 256, 72 + (i - (shown.length - 1) / 2) * 42));
+            // bar level
+            g.fillStyle = 'rgba(255,255,255,0.12)'; g.fillRect(56, 190, 400, 16);
+            g.fillStyle = color; g.fillRect(56, 190, 400 * Math.min(100, item.Level) / 100, 16);
+            g.font = 'bold 24px Segoe UI, Arial, sans-serif';
+            g.fillText(Math.round(item.Level) + '%', 256, 228);
+            return new THREE.CanvasTexture(c);
+        }
+
+        const skillCards = [];
+        const perRing = 12;
+        rawData.forEach((item, i) => {
+            const ring = Math.floor(i / perRing);
+            const inRing = Math.min(perRing, rawData.length - ring * perRing);
+            const idx = i % perRing;
+            const a = (idx / inRing) * Math.PI * 2 + ring * 0.3;
+            const rad = 6.5 + ring * 2.6;
+            const y = 2.2 + (idx % 3) * 0.9;
+            const m = new THREE.Mesh(
+                new THREE.PlaneGeometry(2.6, 1.3),
+                new THREE.MeshBasicMaterial({ map: makeSkillCard(item), side: THREE.DoubleSide, transparent: true })
+            );
+            m.position.set(Math.sin(a) * rad, y, Math.cos(a) * rad);
+            m.userData = { item: item, baseY: y, phase: i };
+            scene.add(m);
+            skillCards.push(m);
+        });
+
+        // ===== Info Box + Hover / Klik pada Kartu =====
+        const infoTitle = document.getElementById('info-title');
+        const infoDesc = document.getElementById('info-desc');
+        function showInfo(item) {
+            if (!item) {
+                infoTitle.textContent = '📚 ' + rawData.length + ' skill dimuat';
+                infoDesc.textContent = 'Arahkan kursor atau ketuk kartu skill untuk melihat detail';
+                return;
+            }
+            infoTitle.textContent = '📖 ' + item.Skill + ' (' + Math.round(item.Level) + '%)';
+            infoDesc.textContent = '[' + item.Kategori + '] ' + item.Deskripsi + (item.Tanggal ? '  •  ' + item.Tanggal : '');
+        }
+        showInfo(null);
+        document.getElementById('subtitle').textContent = (SOURCE === 'sheets')
+            ? 'Tersinkron dengan Google Sheets • ' + rawData.length + ' skill'
+            : 'Mode data contoh (Google Sheets belum terhubung) • ' + rawData.length + ' skill';
+
+        const raycaster = new THREE.Raycaster();
+        const pointer = new THREE.Vector2(-2, -2);
+        let hovered = null;
+        function setPointer(e) {
+            const r = renderer.domElement.getBoundingClientRect();
+            pointer.x = ((e.clientX - r.left) / r.width) * 2 - 1;
+            pointer.y = -((e.clientY - r.top) / r.height) * 2 + 1;
+        }
+        renderer.domElement.addEventListener('pointermove', setPointer);
+        renderer.domElement.addEventListener('pointerdown', setPointer);
+        renderer.domElement.addEventListener('pointerleave', () => pointer.set(-2, -2));
+
         // ===== Rak Buku Kiri & Kanan =====
         const bookCols = [0x8b4513, 0xa0522d, 0x2f4f4f, 0x6b2d5c, 0x1e3a5f, 0xb8860b];
         const bookGeo = new THREE.BoxGeometry(0.9, 0.7, 0.5);
@@ -315,6 +486,22 @@ threejs_code = r"""
             });
             dome.rotation.y += 0.0005;
 
+            // Kartu skill: melayang, selalu menghadap kamera, membesar saat di-hover
+            raycaster.setFromCamera(pointer, camera);
+            const hit = raycaster.intersectObjects(skillCards)[0];
+            const nowHovered = hit ? hit.object : null;
+            if (nowHovered !== hovered) {
+                hovered = nowHovered;
+                showInfo(hovered ? hovered.userData.item : null);
+                renderer.domElement.style.cursor = hovered ? 'pointer' : 'grab';
+            }
+            skillCards.forEach(m => {
+                m.position.y = m.userData.baseY + Math.sin(t * 0.002 + m.userData.phase) * 0.1;
+                m.lookAt(camera.position.x, m.position.y, camera.position.z);
+                const target = (m === hovered) ? 1.15 : 1;
+                m.scale.setScalar(m.scale.x + (target - m.scale.x) * 0.2);
+            });
+
             controls.update();
             composer.render();
         }
@@ -331,6 +518,11 @@ threejs_code = r"""
 </body>
 </html>
 """
+
+# Isi placeholder (SOURCE lebih dulu, JSON terakhir agar isi sel tidak ikut terganti)
+threejs_code = threejs_code.replace("__SOURCE__", sumber_data).replace(
+    "__SKILLS_JSON__", skills_json
+)
 
 # Merender Komponen 3D ke dalam Streamlit
 components.html(threejs_code, height=800, scrolling=False)
